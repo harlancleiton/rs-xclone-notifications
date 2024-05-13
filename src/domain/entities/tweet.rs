@@ -1,4 +1,4 @@
-use crate::valueobjects::entityid::EntityId;
+use crate::domain::value_object::entity_id::EntityId;
 
 pub struct Tweet {
     id: EntityId,
@@ -11,8 +11,8 @@ impl Tweet {
         }
     }
 
-    pub fn id(&self) -> String {
-        self.id.id()
+    pub fn id(&self) -> EntityId {
+        self.id
     }
 }
 

@@ -1,2 +1,2 @@
-pub mod entities;
-pub mod valueobjects;
+pub mod domain;
+pub mod infra;
