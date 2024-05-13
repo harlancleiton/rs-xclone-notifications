@@ -7,6 +7,10 @@ pub struct TweetCreated;
 
 #[async_trait]
 impl KafkaHandler for TweetCreated {
+    fn type_name(&self) -> &'static str {
+        "TweetCreated"
+    }
+
     async fn handle(&self, msg: &BorrowedMessage) -> Result<(), KafkaError> {
         println!("TweetCreated: {:?}", msg.payload_view::<str>());
         Ok(())

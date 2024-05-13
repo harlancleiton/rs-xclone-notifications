@@ -1,3 +1,5 @@
+use env_logger::Builder;
+use log::{debug, error, info, warn, LevelFilter};
 use notifications::infra::kafka::{KafkaHandler, TweetCreated, TweetLiked};
 use rdkafka::config::{ClientConfig, RDKafkaLogLevel};
 use rdkafka::consumer::{CommitMode, Consumer, ConsumerContext, Rebalance, StreamConsumer};
@@ -10,15 +12,15 @@ impl ClientContext for CustomContext {}
 
 impl ConsumerContext for CustomContext {
     fn pre_rebalance(&self, rebalance: &Rebalance) {
-        println!("Pre rebalance {:?}", rebalance);
+        info!("Pre rebalance {:?}", rebalance);
     }
 
     fn post_rebalance(&self, rebalance: &Rebalance) {
-        println!("Post rebalance {:?}", rebalance);
+        info!("Post rebalance {:?}", rebalance);
     }
 
     fn commit_callback(&self, result: KafkaResult<()>, _offsets: &TopicPartitionList) {
-        println!("Committing offsets: {:?}", result);
+        info!("Committing offsets: {:?}", result);
     }
 }
 
@@ -35,7 +37,9 @@ macro_rules! hashmap {
 
 #[tokio::main]
 async fn main() {
-    println!("Starting consumer...");
+    Builder::new().filter(None, LevelFilter::Debug).init();
+
+    info!("Starting consumer...");
 
     let handlers = hashmap!(
         "TweetCreated" => Box::new(TweetCreated) as Box<dyn KafkaHandler>,
@@ -55,39 +59,45 @@ async fn main() {
         .create_with_context(context)
         .expect("Consumer creation failed");
 
-    println!("Subscribing to topic(s) TweetCreated");
-
     consumer
         .subscribe(&["TweetCreated"])
         .expect("Can't subscribe to topic");
 
-    println!("Hello world");
+    info!("Subscribed to topics");
 
     loop {
         match consumer.recv().await {
             Ok(msg) => {
-                println!("Received message: {:?}", msg);
-
                 let topic = msg.topic();
                 match handlers.get(topic) {
                     Some(handler) => match handler.handle(&msg).await {
                         Ok(_) => {
-                            println!("Message handled successfully");
+                            let logger_msg = format!(
+                                "Message processed successfully, topic: {:?}, key: {:?}, partition: {:?}, offset: {:?}",
+                                msg.topic(),
+                                msg.key().map_or_else(
+                                    || "unknown",
+                                    |k| std::str::from_utf8(k).unwrap_or("conversion failed"),
+                                ),
+                                msg.partition(),
+                                msg.offset(),
+                            );
+                            debug!(target: handler.type_name(), "{}", logger_msg);
                             consumer
                                 .commit_message(&msg, CommitMode::Async)
                                 .expect("Commit failed");
                         }
                         Err(e) => {
-                            println!("Error while handling message: {:?}", e);
+                            error!("Error while handling message: {:?}", e);
                         }
                     },
                     None => {
-                        println!("No handler found for topic: {}", topic);
+                        warn!("No handler found for topic: {}", topic);
                     }
                 }
             }
             Err(err) => {
-                println!("Error while receiving message: {:?}", err);
+                error!("Error while receiving message: {:?}", err);
             }
         }
     }
